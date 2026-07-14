@@ -1,0 +1,8 @@
+# Core
+requests>=2.31.0
+beautifulsoup4>=4.12.2
+lxml>=4.9.4
+
+# Optional — enables deepscan() headless-browser detection.
+# Install with:  pip install playwright && playwright install chromium
+# playwright>=1.40.0
