@@ -4,6 +4,7 @@ Network interception, JS globals, rendered DOM, payment iframes.
 """
 
 import asyncio
+from concurrent.futures import ThreadPoolExecutor
 from typing import Set, Dict, List, Tuple
 
 try:
@@ -609,12 +610,42 @@ async def _deep_scan_async(url: str, ua: str, timeout_ms: int) -> Dict:
     }
 
 
-def deep_scan(url: str, ua: str = '', timeout_ms: int = 5000) -> Dict:
-    """Sync wrapper for async deep scan."""
-    _empty = {'payments': set(), 'ecommerce': set(), 'security_versions': {}, 'signals': {}}
+def _empty_result() -> Dict:
+    return {'payments': set(), 'ecommerce': set(), 'security_versions': {}, 'signals': {}}
+
+
+async def deep_scan_async(url: str, ua: str = '', timeout_ms: int = 5000) -> Dict:
+    """Async entry point — await this directly from async code."""
     if not HAS_PLAYWRIGHT:
-        return _empty
+        return _empty_result()
     try:
-        return asyncio.run(_deep_scan_async(url, ua, timeout_ms))
+        return await _deep_scan_async(url, ua, timeout_ms)
     except Exception:
-        return _empty
+        return _empty_result()
+
+
+def deep_scan(url: str, ua: str = '', timeout_ms: int = 5000) -> Dict:
+    """Synchronous wrapper for the async deep scan.
+
+    Safe to call from anywhere: if the caller is *already* inside a running
+    event loop (e.g. an async bot), ``asyncio.run`` would raise
+    ``RuntimeError``. In that case the coroutine is executed on a private
+    loop inside a worker thread instead, so the deep scan never crashes its host.
+    """
+    if not HAS_PLAYWRIGHT:
+        return _empty_result()
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        #//* No running loop → normal synchronous path.
+        try:
+            return asyncio.run(deep_scan_async(url, ua, timeout_ms))
+        except Exception:
+            return _empty_result()
+    #//* A loop is already running → run in an isolated worker thread.
+    try:
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            future = pool.submit(asyncio.run, deep_scan_async(url, ua, timeout_ms))
+            return future.result()
+    except Exception:
+        return _empty_result()

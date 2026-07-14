@@ -1,5 +1,5 @@
 
-import json, re, socket
+import json, re, socket, time
 from pathlib import Path
 from typing import Optional, Dict, Iterable, List, Any, Mapping, Set
 import requests as _requests
@@ -10,9 +10,12 @@ from .deepscan import deep_scan, _guess_suspect_type, HAS_PLAYWRIGHT
 _DATA_DIR = Path(__file__).parent / "data"
 
 
-#//! Recode By: Quetzxl GTL
-#//* Flexxe Lib - Bassed in Wappalizer
+#//! Flexxe — website technology fingerprinter (Wappalyzer-style signatures).
 class Flexxe:
+    #//* Cached singleton: parsing the 640 KB signature DB and compiling ~1,500
+    #//* technologies' worth of regex is expensive, so build it once and reuse.
+    _cached: Optional['Flexxe'] = None
+
     def __init__(self, categories:Dict[str, Any], technologies:Dict[str, Any]) -> None:
         self.categories:   Mapping[str, Category]    = {k:Category(**v) for k,v in categories.items()}
         self.technologies: Mapping[str, Fingerprint] = {k:Fingerprint(name=k, **v) for k,v in technologies.items()}
@@ -22,10 +25,16 @@ class Flexxe:
 
 
     @classmethod
-    def makeObject(cls) -> 'Flexxe':
+    def makeObject(cls, *, cache: bool = True) -> 'Flexxe':
+        """Build (or return a cached) Flexxe from the bundled signature DB."""
+        if cache and cls._cached is not None:
+            return cls._cached
         with open(_DATA_DIR / "technologies.json", "r", encoding="utf-8") as f:
             defaultobj = json.load(f)
-        return cls(categories=defaultobj['categories'], technologies=defaultobj['technologies'])
+        obj = cls(categories=defaultobj['categories'], technologies=defaultobj['technologies'])
+        if cache:
+            cls._cached = obj
+        return obj
 
 
     def _hasTechnology(self, tech_fingerprint: Fingerprint, webpage: IWebPage) -> bool:
@@ -187,11 +196,17 @@ class Flexxe:
 
     def analyze(self, webpage:IWebPage) -> Set[str]:
         """Return a set of technologies detected on the web page."""
+        #//* Reset per-scan state (the Flexxe object is cached and reused).
+        self.detected_technologies.pop(webpage.url, None)
         self.serverSite = webpage.headers.get('Server', webpage.headers.get('server', 'Not Found!'))
         detected = set()
         for tech_name, technology in self.technologies.items():
-            if self._hasTechnology(technology, webpage):
-                detected.add(tech_name)
+            #//* Never let one malformed signature abort the whole scan.
+            try:
+                if self._hasTechnology(technology, webpage):
+                    detected.add(tech_name)
+            except Exception:
+                continue
         detected.update(self._getImpliedTechnologies(detected))
         return detected
 
@@ -439,6 +454,13 @@ class Flexxe:
     _CAT_ECOMMERCE = 'Ecommerce'
     _CAT_PAYMENT   = 'Payment processors'
     _CAT_LANGS     = 'Programming languages'
+    _CAT_CMS       = 'CMS'
+    _CAT_ANALYTICS = 'Analytics'
+    _CAT_TAGMGR    = 'Tag managers'
+    _CAT_JS_FW     = 'JavaScript frameworks'
+    _CAT_WEB_FW    = 'Web frameworks'
+    _CAT_CDN       = 'CDN'
+    _CAT_WEBSERVER = 'Web servers'
 
     #//! Payment methods/brands to exclude (not real gateways)
     _EXCLUDE_PROCESSORS = {
@@ -520,26 +542,52 @@ class Flexxe:
 
         return sorted(found)
 
-    def analyzeWithCategories(self, webpage:IWebPage, ua:str = '') -> Dict[str, Any]:
-        """Return categorized analysis results."""
+    def analyzeWithCategories(self, webpage:IWebPage, ua:str = '', deep:bool = True) -> Dict[str, Any]:
+        """Return categorized analysis results.
+
+        :param deep: when True (default) and Playwright is installed, run the
+                     headless-browser deep scan for runtime-only signals.
+        """
+        started = time.perf_counter()
         apps = self.analyze(webpage)
 
         securities: List[str] = []
         ecommerce:  List[str] = []
         processors: List[str] = []
         langsP:     List[str] = []
+        cms:        List[str] = []
+        frameworks: List[str] = []
+        analytics:  List[str] = []
+        cdn:        List[str] = []
+        web_servers:List[str] = []
+        technologies: List[Dict[str, Any]] = []
 
-        for app_name in apps:
+        for app_name in sorted(apps):
             categories = self.getCategories(app_name)
             versions   = self.getVersions(webpage.url, app_name)
             ver_str    = versions[0] if versions else ''
             display    = f"{app_name} {ver_str}".strip() if ver_str else app_name
+
+            #//* Rich per-technology record (every detection, any category).
+            technologies.append({
+                'name':       app_name,
+                'version':    ver_str or None,
+                'categories': categories,
+                'confidence': self.getConfidence(webpage.url, app_name) or 100,
+            })
 
             if self._CAT_SECURITY  in categories: securities.append(display)
             if self._CAT_ECOMMERCE in categories: ecommerce.append(display)
             if self._CAT_PAYMENT   in categories and app_name not in self._EXCLUDE_PROCESSORS:
                 processors.append(display)
             if self._CAT_LANGS     in categories: langsP.append(display)
+            if self._CAT_CMS       in categories: cms.append(display)
+            if self._CAT_WEBSERVER in categories: web_servers.append(display)
+            if self._CAT_CDN       in categories: cdn.append(display)
+            if self._CAT_JS_FW in categories or self._CAT_WEB_FW in categories:
+                frameworks.append(display)
+            if self._CAT_ANALYTICS in categories or self._CAT_TAGMGR in categories:
+                analytics.append(display)
 
         #//! Header-based security detection (WAFs, cookies, CDN headers)
         header_secs = self._detectSecurityFromHeaders(webpage)
@@ -566,9 +614,10 @@ class Flexxe:
                 processors.append(f"{proc_name} (deep)")
                 detected_pay.add(proc_name)
 
-        #//! 3) Playwright headless — always run for richer detection
+        #//! 3) Playwright headless — richer runtime detection (opt-out via deep=False)
         pw_signals: dict = {}
-        if HAS_PLAYWRIGHT:
+        deep_used = bool(deep and HAS_PLAYWRIGHT)
+        if deep_used:
             pw_result = deep_scan(webpage.url, ua=ua, timeout_ms=5000)
 
             for proc_name in sorted(pw_result.get('payments', set())):
@@ -617,10 +666,11 @@ class Flexxe:
             ip = str(socket.gethostbyname(host))
         except: pass
 
-        #//! Determine suspectType
+        #//! Determine suspectType (auth = subscriptions/memberships, charge = purchases)
         suspect_type = _guess_suspect_type(pw_signals, ecommerce, processors)
 
-        has_results = bool(securities or ecommerce or langsP or processors)
+        has_results = bool(securities or ecommerce or langsP or processors
+                           or cms or frameworks or analytics or cdn or web_servers)
 
         result: Dict[str, Any] = {
             'status': has_results,
@@ -629,9 +679,19 @@ class Flexxe:
             'url': webpage.url,
             'ip': ip,
             'server': self.serverSite,
+            'suspect_type': suspect_type,
             'securities': securities or ['Not Found!'],
             'ecommerce': ecommerce or ['Not Found!'],
             'processors': processors or ['Not Found!'],
+            'languages': langsP or ['Not Found!'],
+            'cms': cms or ['Not Found!'],
+            'frameworks': frameworks or ['Not Found!'],
+            'analytics': analytics or ['Not Found!'],
+            'cdn': cdn or ['Not Found!'],
+            'web_servers': web_servers or ['Not Found!'],
+            'technologies': technologies,
+            'deep_scan': deep_used,
+            'elapsed': round(time.perf_counter() - started, 3),
         }
         if not has_results:
             result['error'] = 'No technologies were found on this website.'
@@ -692,12 +752,34 @@ class Flexxe:
 
 
 #//! Main Function
-def analyze(url:str, useragent:str = 'Mozilla/5.0 (Linux; Android 13; Pixel 6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Mobile Safari/537.36') -> Dict[str, Any]:
+_DEFAULT_UA = ('Mozilla/5.0 (Linux; Android 13; Pixel 6) AppleWebKit/537.36 '
+               '(KHTML, like Gecko) Chrome/122.0.0.0 Mobile Safari/537.36')
+
+
+def analyze(url:str,
+            useragent:str = _DEFAULT_UA,
+            *,
+            deep:bool = True,
+            timeout:float = 15,
+            verify:bool = True) -> Dict[str, Any]:
+    """Fingerprint the technologies powering ``url``.
+
+    :param useragent: User-Agent to send (and to hand to the deep scanner).
+    :param deep:      run the Playwright deep scan when available (default True).
+    :param timeout:   per-request timeout in seconds.
+    :param verify:    verify TLS certificates (set False for self-signed hosts).
+    :returns: a dict with securities, ecommerce, processors, languages, cms,
+              frameworks, analytics, cdn, web_servers, a detailed ``technologies``
+              list, server/IP, ``suspect_type`` and timing — or an ``error`` key.
+    """
+    #//* Normalise: accept bare hosts like "example.com".
+    url = url.strip()
+    if not re.match(r'^https?://', url, re.I):
+        url = 'https://' + url
     try:
         flexxe = Flexxe.makeObject()
-        headers = {}
-        if useragent: headers['User-Agent'] = useragent
-        webpage = WebPage.newFURL(url, headers=headers)
-        return flexxe.analyzeWithCategories(webpage, ua=useragent)
+        headers = {'User-Agent': useragent} if useragent else None
+        webpage = WebPage.newFURL(url, headers=headers, timeout=timeout, verify=verify)
+        return flexxe.analyzeWithCategories(webpage, ua=useragent, deep=deep)
     except Exception as a:
         return {'status': False, 'url': url, 'error': str(a)}
