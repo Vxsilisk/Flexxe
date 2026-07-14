@@ -15,8 +15,9 @@ runtime-only signals.
 from .Flexxe import Flexxe, analyze
 from .web import WebPage
 from .deepscan import HAS_PLAYWRIGHT, deep_scan, deep_scan_async
+from .variants import resolve as resolve_variant, refine_label
 
-__version__ = "2.0.0"
+__version__ = "2.1.0"
 
 __all__ = [
     "Flexxe",
@@ -24,6 +25,8 @@ __all__ = [
     "analyze",
     "deep_scan",
     "deep_scan_async",
+    "resolve_variant",
+    "refine_label",
     "HAS_PLAYWRIGHT",
     "__version__",
 ]

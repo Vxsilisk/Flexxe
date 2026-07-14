@@ -20,7 +20,7 @@ static fingerprints · security / WAF detection · payment-processor discovery �
 
 <br>
 
-[**Features**](#-features) · [**Install**](#-installation) · [**Quick start**](#-quick-start) · [**Output**](#-output) · [**API**](#-api) · [**CLI**](#-cli) · [**Deep scan**](#-deep-scan) · [**How it works**](#-how-it-works)
+[**Features**](#-features) · [**Install**](#-installation) · [**Quick start**](#-quick-start) · [**Output**](#-output) · [**API**](#-api) · [**CLI**](#-cli) · [**Editions**](#-edition--variant-detection) · [**Deep scan**](#-deep-scan) · [**How it works**](#-how-it-works)
 
 </div>
 
@@ -35,6 +35,7 @@ static fingerprints · security / WAF detection · payment-processor discovery �
 | ⟡ | **E-commerce & CMS** | Shopify, WooCommerce, Magento, PrestaShop, BigCommerce, VTEX, Wix, Squarespace, WordPress and more. |
 | ❖ | **Payment processors** | Stripe, PayPal, Braintree, Adyen, Klarna, MercadoPago and **60+ gateways** by CSP, JS-bundle, network and DOM evidence. |
 | ◈ | **Full stack readout** | Languages, JS/web frameworks, analytics & tag managers, CDN, web servers — plus a detailed per-technology list with versions, categories and confidence. |
+| ⟐ | **Edition detection** | Reports the *type* of a technology, not just its name: reCAPTCHA v2 / v2 Invisible / v3 / Enterprise, Payflow Pro vs Link, Stripe Elements vs Checkout, Braintree Drop-in vs Hosted Fields, GA4 vs Universal Analytics. Data-driven via `data/variants.json`. |
 | ⌗ | **Server & IP** | Resolves the origin server banner and the host's A-record IP. |
 | ⬢ | **Deep scan** | Optional Playwright pass: network interception, JS globals, rendered DOM, payment iframes and versioned security detection. Loop-safe — usable from sync **and** async code. |
 | ⬡ | **Fast & robust** | Signature DB is parsed once and cached; a malformed signature can never abort a scan; cookie parsing is spec-correct. |
@@ -163,6 +164,35 @@ python -m Flexxe shopify.com --no-deep --compact
 ```
 
 Exit code is `0` when technologies were found, `1` otherwise.
+
+---
+
+## ⟐ Edition / variant detection
+
+Flexxe reports the **kind** of a technology, not only its presence — the
+distinction that actually matters when you're profiling a checkout or a
+bot-wall. Instead of `reCAPTCHA`, you get `reCAPTCHA v3` or `reCAPTCHA Enterprise`;
+instead of `Payflow`, you get `Payflow Pro` vs `Payflow Link`.
+
+| Technology | Editions detected |
+|---|---|
+| reCAPTCHA | v2 · v2 Invisible · v3 · Enterprise |
+| hCaptcha | standard · Invisible · Enterprise |
+| Cloudflare Turnstile | managed · Invisible |
+| Payflow | Pro · Link |
+| Stripe | Elements · Checkout |
+| Braintree | Drop-in · Hosted Fields |
+| PayPal | Smart Buttons · Advanced Cards |
+| Klarna | Payments · Checkout (KCO) · On-Site Messaging · Sign in with Klarna |
+| Authorize.Net | Accept.js · Accept Hosted |
+| Google Analytics | GA4 · Universal Analytics (legacy) |
+
+Rules live in **`data/variants.json`** — an ordered, most-specific-first list of
+match clauses (`any` / `all` / `not` substrings, or `re` regexes) per technology.
+Add a technology or a new edition by editing that file; no code change needed.
+Resolution runs against the raw response **and** the browser-rendered DOM (when
+the deep scan is on), so runtime-injected widgets are classified correctly. The
+detailed `technologies` entries gain a `variant` field when an edition is resolved.
 
 ---
 

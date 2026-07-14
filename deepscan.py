@@ -545,7 +545,14 @@ _JS_FULL_CHECK = """() => {
         }
     } catch(e) {}
 
-    return { pay, ecom, sec, signals };
+    //=== EVIDENCE BLOB for edition/variant resolution (rendered scripts + DOM) ===
+    let ev = '';
+    try {
+        const srcs = Array.from(document.querySelectorAll('script[src]')).map(s => s.src).join(' ');
+        ev = (srcs + ' ' + document.documentElement.innerHTML).slice(0, 300000);
+    } catch(e) {}
+
+    return { pay, ecom, sec, signals, ev };
 }"""
 
 
@@ -585,6 +592,7 @@ async def _deep_scan_async(url: str, ua: str, timeout_ms: int) -> Dict:
     pw_payments: Set[str] = set()
     pw_ecommerce: Set[str] = set()
     signals: dict = {}
+    evidence: str = ''
     captured: List[str] = []
 
     async with async_playwright() as p:
@@ -617,6 +625,7 @@ async def _deep_scan_async(url: str, ua: str, timeout_ms: int) -> Dict:
             pw_ecommerce.update(result.get('ecom', []))
             sec_versions = result.get('sec', {})
             signals = result.get('signals', {})
+            evidence = result.get('ev', '') or ''
         except: pass
 
         #//* 3) Check iframe URLs (PW-level, not DOM-level)
@@ -640,11 +649,12 @@ async def _deep_scan_async(url: str, ua: str, timeout_ms: int) -> Dict:
         'ecommerce': pw_ecommerce,
         'security_versions': sec_versions,
         'signals': signals,
+        'evidence': evidence,
     }
 
 
 def _empty_result() -> Dict:
-    return {'payments': set(), 'ecommerce': set(), 'security_versions': {}, 'signals': {}}
+    return {'payments': set(), 'ecommerce': set(), 'security_versions': {}, 'signals': {}, 'evidence': ''}
 
 
 async def deep_scan_async(url: str, ua: str = '', timeout_ms: int = 5000) -> Dict:

@@ -1,0 +1,62 @@
+{
+  "_comment": "Edition/type-version rules. For each base technology, an ordered list of variants; the FIRST rule that matches the page evidence wins. Match fields (all optional): 'any' = at least one substring present (case-insensitive); 're' = at least one regex matches; 'all' = every substring present; 'not' = none of these present. A rule with no match fields always matches (use as a fallback). Order rules most-specific first.",
+
+  "reCAPTCHA": [
+    { "label": "reCAPTCHA Enterprise", "any": ["recaptcha/enterprise.js", "recaptcha/enterprise", "grecaptcha.enterprise"] },
+    { "label": "reCAPTCHA v3", "re": ["recaptcha/api\\.js\\?render=(?!explicit|onload)[a-z0-9_-]{10,}"], "any": ["recaptcha-v3", "recaptcha_v3", "grecaptcha.execute("], "not": ["g-recaptcha", "grecaptcha.render"] },
+    { "label": "reCAPTCHA v2 (Invisible)", "all": ["g-recaptcha"], "any": ["data-size=\"invisible\"", "data-size='invisible'", "data-size=invisible", "'size':'invisible'", "\"size\":\"invisible\"", "size: 'invisible'"] },
+    { "label": "reCAPTCHA v2", "any": ["g-recaptcha", "data-sitekey", "recaptcha/api.js", "grecaptcha.render"] }
+  ],
+
+  "hCaptcha": [
+    { "label": "hCaptcha Enterprise", "any": ["rqdata", "enterprisepayload", "data-rqdata", "hcaptcha-enterprise"] },
+    { "label": "hCaptcha (Invisible)", "all": ["h-captcha"], "any": ["data-size=\"invisible\"", "data-size='invisible'", "data-size=invisible", "hcaptcha.execute("] },
+    { "label": "hCaptcha", "any": ["h-captcha", "hcaptcha.com/1/api.js", "js.hcaptcha.com"] }
+  ],
+
+  "Cloudflare Turnstile": [
+    { "label": "Cloudflare Turnstile (Invisible)", "all": ["cf-turnstile"], "any": ["data-appearance=\"interaction-only\"", "data-appearance='interaction-only'", "data-size=\"invisible\""] },
+    { "label": "Cloudflare Turnstile", "any": ["cf-turnstile", "challenges.cloudflare.com/turnstile", "turnstile.render"] }
+  ],
+
+  "Payflow": [
+    { "label": "Payflow Pro", "any": ["payflowpro", "payflow_pro", "payflow-pro", "pilot-payflowpro", "payflowpro.paypal.com"] },
+    { "label": "Payflow Link", "any": ["payflowlink", "payflow_link", "payflow-link", "securepayments.paypal.com", "payflow.paypal.com/payflowlink"] }
+  ],
+
+  "Braintree": [
+    { "label": "Braintree (Drop-in)", "any": ["braintree-web-drop-in", "braintree/web/dropin", "braintree-dropin", "dropin.min.js"] },
+    { "label": "Braintree (Hosted Fields)", "any": ["hostedfields.create", "braintree-hosted-fields", "hosted-fields.min.js", "hostedfields"] }
+  ],
+
+  "PayPal": [
+    { "label": "PayPal (Advanced Cards)", "all": ["paypal"], "any": ["components=hosted-fields", "paypal.hostedfields", "paypal-hosted-fields", "advanced-cards"] },
+    { "label": "PayPal (Smart Buttons)", "all": ["paypal"], "any": ["paypal.buttons", "www.paypal.com/sdk/js", "sdk/js?client-id", "paypal-button"] }
+  ],
+
+  "Stripe": [
+    { "label": "Stripe Checkout", "any": ["buy.stripe.com", "checkout.stripe.com", "redirecttocheckout", "stripe-checkout"] },
+    { "label": "Stripe Elements", "any": ["elements.create(", "stripe.elements(", "payment-element", "__privatestripecontroller", "cardelement", "card-element"] }
+  ],
+
+  "Klarna Checkout": [
+    { "label": "Klarna On-Site Messaging", "any": ["klarna-onsite-messaging", "data-klarna-osm", "klarnaservices.com/messaging", "klarna-osm", "/kp/lib/v1/api.js#osm"] },
+    { "label": "Klarna Checkout (KCO)", "any": ["klarna_checkout", "checkout.klarna.com", "klarna-checkout"] },
+    { "label": "Klarna Payments", "any": ["x.klarnacdn.net/kp", "klarna-payments", "klarnaasynccallback", "kp/lib/v1/api.js"] },
+    { "label": "Sign in with Klarna", "any": ["js.klarna.com/web-sdk", "klarnasdkcallback", "sign-in-with-klarna"] }
+  ],
+
+  "Authorize.Net": [
+    { "label": "Authorize.Net Accept.js", "any": ["accept.js", "acceptcore.js", "js.authorize.net", "acceptui.js"] },
+    { "label": "Authorize.Net Accept Hosted", "any": ["accepthosted", "accept-hosted", "accept hosted"] }
+  ],
+
+  "Adyen": [
+    { "label": "Adyen (Web Drop-in)", "all": ["adyen"], "any": ["createdropin", "dropin", "adyen.js", "checkoutshopper"] }
+  ],
+
+  "Google Analytics": [
+    { "label": "Google Analytics 4 (GA4)", "re": ["gtag/js\\?id=g-", "\\bg-[a-z0-9]{8,}\\b"], "any": ["gtag('config', 'g-", "gtag(\"config\", \"g-"] },
+    { "label": "Universal Analytics (legacy)", "re": ["\\bua-\\d{4,}-\\d"], "any": ["google-analytics.com/analytics.js", "ga('create'", "ga(\"create\""] }
+  ]
+}

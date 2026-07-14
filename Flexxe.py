@@ -6,6 +6,7 @@ import requests as _requests
 from .web import WebPage, IWebPage
 from .fingerprint import Fingerprint, Pattern, Technology, Category
 from .deepscan import deep_scan, _guess_suspect_type, HAS_PLAYWRIGHT
+from .variants import refine_label
 
 _DATA_DIR = Path(__file__).parent / "data"
 
@@ -577,6 +578,15 @@ class Flexxe:
         started = time.perf_counter()
         apps = self.analyze(webpage)
 
+        #//! Evidence blob for edition/variant resolution (static: raw HTML + srcs +
+        #//* header values + cookie names). Deep-scan rendered DOM is appended later.
+        evidence_parts = [webpage.html]
+        evidence_parts.extend(webpage.scripts)
+        evidence_parts.extend(webpage.links)
+        evidence_parts.extend(str(v) for v in webpage.headers.values())
+        evidence_parts.extend(webpage.cookies.keys())
+        evidence = ' '.join(p for p in evidence_parts if p)
+
         securities: List[str] = []
         ecommerce:  List[str] = []
         processors: List[str] = []
@@ -646,6 +656,11 @@ class Flexxe:
         if deep_used:
             pw_result = deep_scan(webpage.url, ua=ua, timeout_ms=5000)
 
+            #//* Append the browser-rendered DOM to the variant-resolution evidence.
+            pw_ev = pw_result.get('evidence', '')
+            if pw_ev:
+                evidence = evidence + ' ' + pw_ev
+
             for proc_name in sorted(pw_result.get('payments', set())):
                 if proc_name not in detected_pay and proc_name not in self._EXCLUDE_PROCESSORS:
                     processors.append(f"{proc_name} (pw)")
@@ -684,6 +699,16 @@ class Flexxe:
 
         #//! Deduplicate securities by canonical vendor
         securities = self._dedup_securities(securities)
+
+        #//! Edition / type-version resolution (reCAPTCHA v2/v3/Enterprise,
+        #//* Payflow Pro/Link, Stripe Elements/Checkout, ...) from data/variants.json
+        securities = self._dedupe_keep_order([refine_label(s, evidence) for s in securities])
+        processors = self._dedupe_keep_order([refine_label(p, evidence) for p in processors])
+        analytics  = self._dedupe_keep_order([refine_label(a, evidence) for a in analytics])
+        for tech in technologies:
+            refined = refine_label(tech['name'], evidence)
+            if refined != tech['name']:
+                tech['variant'] = refined
 
         #//! Resolve IP
         ip = 'Not Found!'
@@ -754,6 +779,18 @@ class Flexxe:
         'Imperva / Incapsula':       2,
         'Imperva':                   1,
     }
+
+    @staticmethod
+    def _dedupe_keep_order(items: List[str]) -> List[str]:
+        """Drop duplicates while preserving first-seen order (variant refinement
+        can collapse two labels onto one)."""
+        seen: Set[str] = set()
+        out: List[str] = []
+        for it in items:
+            if it not in seen:
+                seen.add(it)
+                out.append(it)
+        return out
 
     @classmethod
     def _dedup_securities(cls, securities: List[str]) -> List[str]:
