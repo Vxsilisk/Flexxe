@@ -92,6 +92,16 @@ _PAY_DOMAINS: Dict[str, str] = {
     'paymob.com':            'Paymob',
     'moyasar.com':           'Moyasar',
     'komoju.com':            'Komoju',
+    #//! Verified script/CDN hosts not covered by the base-domain rules above
+    'klarnacdn.net':         'Klarna Checkout',   #//* x.klarnacdn.net (SDK CDN)
+    'klarnaservices.com':    'Klarna Checkout',
+    'squarecdn.com':         'Square',            #//* web.squarecdn.com (Web Payments SDK)
+    'mlstatic.com':          'MercadoPago',       #//* secure.mlstatic.com (MP SDK CDN)
+    'gr4vy.com':             'Gr4vy',
+    'primer.io':             'Primer',
+    'basistheory.com':       'Basis Theory',
+    'vgs.io':                'Very Good Security',
+    'verygoodvault.com':     'Very Good Security',
 }
 
 #//! Ecommerce domains (network interception) — strict to avoid false positives
@@ -123,6 +133,12 @@ _ECOM_DOMAINS: Dict[str, str] = {
     'weebly.com':            'Weebly',
     'weeblycloud.com':       'Weebly',
     'woocommerce.com':       'WooCommerce',
+    #//! Verified analytics/CDN hosts (strong platform signal)
+    'shopifysvc.com':        'Shopify',    #//* monorail-edge.shopifysvc.com (Shopify analytics)
+    'shopifycloud.com':      'Shopify',
+    'cdn11.bigcommerce.com': 'BigCommerce',
+    'mzstatic.com/commerce': 'Salesforce Commerce Cloud',
+    'shopifycdn.net':        'Shopify',
 }
 
 #//! Full JS evaluation — globals, DOM inspection, rendered scripts, signals
@@ -158,6 +174,14 @@ _JS_FULL_CHECK = """() => {
     try { if (window.LemonSqueezy) pay.push('Lemon Squeezy'); } catch(e) {}
     try { if (window.FastSpring) pay.push('FastSpring'); } catch(e) {}
     try { if (window.MercadoPago) pay.push('MercadoPago'); } catch(e) {}
+    try { if (window.Frames || window.CheckoutWebComponents || window.CKOConfig) pay.push('Checkout.com'); } catch(e) {}
+    try { if (window.Accept) pay.push('Authorize.Net'); } catch(e) {}
+    try { if (window.Mollie) pay.push('Mollie'); } catch(e) {}
+    try { if (window.AdyenWeb) pay.push('Adyen'); } catch(e) {}
+    try { if (window.BoltCheckout) pay.push('Bolt'); } catch(e) {}
+    try { if (window.paddle || window.Paddle) pay.push('Paddle'); } catch(e) {}
+    try { if (window.Gr4vy) pay.push('Gr4vy'); } catch(e) {}
+    try { if (window.Primer) pay.push('Primer'); } catch(e) {}
 
     //=== ECOMMERCE JS GLOBALS ===
     try { if (window.Shopify) ecom.push('Shopify'); } catch(e) {}
@@ -324,6 +348,13 @@ _JS_FULL_CHECK = """() => {
         const allScripts = scripts.join(' ').toLowerCase();
         const lhtml = html.toLowerCase();
 
+        //=== JS window globals injected by bot-management SDKs (verified) ===
+        try { if (window.DataDome || window.ddjskey || window.ddCaptcha) sec['Datadome'] = 'Datadome'; } catch(e) {}
+        try { if (window._pxAppId || window._pxParam1 || window.PX) sec['PerimeterX'] = 'PerimeterX / HUMAN'; } catch(e) {}
+        try { if (window.bmak) sec['Akamai Bot Manager'] = 'Akamai Bot Manager'; } catch(e) {}
+        try { if (window.awsWafIntegration || window.AwsWafIntegration) sec['AWS WAF'] = 'AWS WAF'; } catch(e) {}
+        try { if (window.KPSDK || window.kpsdk) sec['Kasada'] = 'Kasada'; } catch(e) {}
+
         // reCAPTCHA — Enterprise vs v2 vs v3
         const hasRecaptcha = lhtml.includes('recaptcha') || allScripts.includes('recaptcha');
         if (hasRecaptcha) {
@@ -384,8 +415,9 @@ _JS_FULL_CHECK = """() => {
             sec['Imperva'] = 'Imperva / Incapsula';
         }
 
-        // Kasada
-        if (allScripts.includes('kasada') || lhtml.includes('kpsdk')) {
+        // Kasada — also identified by its fixed SDK path UUID
+        if (allScripts.includes('kasada') || lhtml.includes('kpsdk')
+            || allScripts.includes('149e9513-01fa-4fb0-aad4-566afd725d1b')) {
             sec['Kasada'] = 'Kasada';
         }
 
@@ -472,8 +504,9 @@ _JS_FULL_CHECK = """() => {
             sec['Kount'] = 'Kount';
         }
 
-        // ThreatMetrix / LexisNexis
+        // ThreatMetrix / LexisNexis — h.online-metrix.net is its device-fingerprint host
         if (allScripts.includes('threatmetrix') || allScripts.includes('lexisnexis')
+            || allScripts.includes('online-metrix') || lhtml.includes('online-metrix')
             || lhtml.includes('tmx_') || lhtml.includes('threatmetrix')) {
             sec['ThreatMetrix'] = 'ThreatMetrix / LexisNexis';
         }

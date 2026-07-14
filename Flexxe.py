@@ -314,6 +314,15 @@ class Flexxe:
         'komoju.com':            'Komoju',
         'fondy.eu':              'Fondy',
         'fondy.io':              'Fondy',
+        #//! Verified script/CDN hosts frequently whitelisted in CSP directives
+        'klarnacdn.net':         'Klarna Checkout',
+        'squarecdn.com':         'Square',
+        'mlstatic.com':          'MercadoPago',
+        'checkout-web-components.checkout.com': 'Checkout.com',
+        'gr4vy.com':             'Gr4vy',
+        'primer.io':             'Primer',
+        'basistheory.com':       'Basis Theory',
+        'verygoodvault.com':     'Very Good Security',
     }
 
     def _detectFromCSP(self, webpage: IWebPage) -> Set[str]:
@@ -500,27 +509,44 @@ class Flexxe:
         ('server',              'ddos-guard',       'DDoS-Guard'),
         ('server',              'stackpath',        'StackPath'),
         ('x-sp-waf',            '',                 'StackPath'),
+        #//! Bot-management response headers (verified against vendor docs / traffic)
+        ('x-datadome',          '',                 'Datadome'),
+        ('x-datadome-request',  '',                 'Datadome'),
+        ('x-kpsdk-ct',          '',                 'Kasada'),
+        ('x-kpsdk-cd',          '',                 'Kasada'),
+        ('x-kpsdk-v',           '',                 'Kasada'),
+        ('x-px-block-score',    '',                 'PerimeterX / HUMAN'),
+        ('x-amzn-waf-action',   '',                 'AWS WAF'),
+        ('x-akamai-request-id', '',                 'Akamai'),
+        ('akamai-grn',          '',                 'Akamai'),
+        ('x-sh-pointer',        '',                 'Shape Security (F5)'),
     ]
 
     _COOKIE_SECURITY_MAP: List[tuple] = [
-        #//* (cookie_prefix, display_name)
+        #//* (cookie_prefix, display_name) — prefix matched, so '_px' covers _px2/_px3/_pxvid...
         #//* Cloudflare cookies → same canonical as header detection
         ('_cf_bm',              'Cloudflare'),
         ('__cf_bm',             'Cloudflare'),
         ('cf_clearance',        'Cloudflare'),
         ('_cfuvid',             'Cloudflare'),
+        ('__cfruid',            'Cloudflare'),
         ('datadome',            'Datadome'),
-        ('_pxhd',               'PerimeterX / HUMAN'),
-        ('_px',                 'PerimeterX / HUMAN'),
-        ('reese84',             'Kasada'),
+        ('_px',                 'PerimeterX / HUMAN'),   #//* _px, _px2, _px3, _pxvid, _pxhd, _pxde, _pxcts
+        #//* reese84 / nlbi are Imperva's bot-protection cookies (NOT Kasada — Kasada uses x-kpsdk-* headers)
+        ('reese84',             'Imperva / Incapsula'),
+        ('incap_ses',           'Imperva / Incapsula'),
+        ('visid_incap',         'Imperva / Incapsula'),
+        ('nlbi_',               'Imperva / Incapsula'),
         ('_abck',               'Akamai Bot Manager'),
         ('ak_bmsc',             'Akamai Bot Manager'),
         ('bm_sv',               'Akamai Bot Manager'),
-        ('incap_ses',           'Imperva / Incapsula'),
-        ('visid_incap',         'Imperva / Incapsula'),
+        ('bm_sz',               'Akamai Bot Manager'),
+        ('bm_mi',               'Akamai Bot Manager'),
+        ('aws-waf-token',       'AWS WAF'),
         ('__ddg',               'DDoS-Guard'),
         ('TS01',                'F5 BIG-IP ASM'),
         ('f5_cspm',             'F5 BIG-IP ASM'),
+        ('f5avraaaaaaaaaaaaaaaa','F5 BIG-IP ASM'),
         ('BIGipServer',         'F5 BIG-IP ASM'),
     ]
 
